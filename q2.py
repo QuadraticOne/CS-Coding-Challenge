@@ -1,6 +1,7 @@
 # ONLY EDIT FUNCTIONS MARKED CLEARLY FOR EDITING
 
 import numpy as np
+from random import randint
 
 #compute all combinations for two portfolios
 def question02(cashFlowIn, cashFlowOut):
@@ -30,3 +31,13 @@ def check_for_intersection(in_set, out_set):
   if len(in_set.intersection(out_set)) > 0:
     return 0
   return take_smallest_value(in_set, out_set)
+
+
+def dummy_set(max_length=1000, max_transaction_size=100):
+  """
+  Int? -> Int? -> [Int]
+  Create dummy data with an optionally specified maximum length
+  and maximum transaction size.
+  """
+  length = randint(1, max_length)
+  return [randint(1, max_transaction_size) for _ in range(length)]
