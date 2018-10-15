@@ -8,12 +8,11 @@ def question01(portfolios):
   if len(portfolios) < 2:
     return None
   # modify and then return the variable below
-  answer = maximise_after_grouping(portfolios, k=4)
-  # answer = brute_force(portfolios)
+  answer = maximise_by_culling(portfolios, k=4)
   return answer
 
 
-def maximise_after_grouping(portfolios, k=4):
+def maximise_by_culling(portfolios, k=4):
   """
   [Int] -> Int
   Maximise the XOR of two portfolios in the list of portfolios, first
@@ -22,8 +21,9 @@ def maximise_after_grouping(portfolios, k=4):
   remaining optimal groups.
   """
   groups = group_by_leading_bits(portfolios, k_max=k)
-  group_a, group_b = find_optimal_groups(groups)
-  return max([a ^ b for a, b in combine(group_a, group_b)])
+  group_pairs = find_optimal_group_pairs(groups)
+  return max([max([a ^ b for a, b in combine(group_a, group_b)]) \
+    for group_a, group_b in group_pairs])
 
 
 def brute_force(portfolios):
@@ -92,10 +92,10 @@ def star_map(f, values, include_duplicates=False):
   return outputs
 
 
-def find_optimal_groups(leading_bit_groups):
+def find_optimal_group_pairs(leading_bit_groups):
   """
-  Dict Int [Int] -> ([Int], [Int])
-  Find the two groups whose leading k bits maximise the XOR function.
+  Dict Int [Int] -> [([Int], [Int])]
+  Find the a list of group pairs whose leading bits maximise the XOR function.
   """
   keys = list(leading_bit_groups.keys())
   # Special case where there is only one group:
@@ -103,11 +103,17 @@ def find_optimal_groups(leading_bit_groups):
     key = keys[0]
     return leading_bit_groups[key], leading_bit_groups[key]
 
-  i, j = argmax(lambda p: p[0] ^ p[1] if \
-    len(leading_bit_groups[p[0]]) > 0 and len(leading_bit_groups[p[1]]) > 0 else 0,
-    pairs(list(leading_bit_groups.keys())))
-  return leading_bit_groups[i], leading_bit_groups[j]
+  # Calculate the XOR of each leading bits pair
+  bit_pair_xors = star_map(lambda a, b: (a, b, a ^ b), keys)
+  maximum_xor = argmax(lambda t: t[2], bit_pair_xors)[2]
+  optimal_group_pairs = [(a, b) for a, b, xor in bit_pair_xors \
+    if xor == maximum_xor \
+      and len(leading_bit_groups[a]) > 0 \
+      and len(leading_bit_groups[b]) > 0]
 
+  # Extract group contents for each optimal pair
+  return [(leading_bit_groups[a], leading_bit_groups[b]) \
+    for a, b in optimal_group_pairs]
 
 def group_by_leading_bits(ns, k_max=4):
   """
