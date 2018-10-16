@@ -107,6 +107,44 @@ def optimise_ordered_tensor(dereference_function, shape):
   return find_smallest_non_negative
 
 
+def iterated_dimension(params, index, variable_dimension):
+  """
+  ProblemParameters -> [Int] -> Int -> (Int -> ([Int], Int)?)
+  Return a function which, given an input integer, returns an index
+  within the state tensor along with its state value, or None if the
+  dimension's limit has been exceeded.  The index of this new function
+  is zero-based.  The indices included are obtained by increasing
+  the specified dimension of the tensor, starting from the index
+  given.
+  """
+  out_of_bounds_index = params.state_tensor_shape[variable_dimension] - \
+    index[variable_dimension]
+  def dimension_at(i):
+    """
+    Int -> ([Int], Int)?
+    """
+    if i >= out_of_bounds_index:
+      return None
+    else:
+      current_index = index[:]
+      current_index[variable_dimension] = index[variable_dimension] + i
+      return (current_index, params.value_at(current_index))
+  return dimension_at
+
+
+def has_repeated_indices_per_flow(params, index):
+  """
+  ProblemParameters -> [Int] -> Bool
+  Determines whether the given index, if split into corresponding
+  indices for inward and outward cash flows, contains any repeated
+  values, making it an illegal index.
+  """
+  in_indices, out_indices = split_list(index, params.in_set_size)
+  def all_unique(ls):
+    return len(set(ls)) == len(ls)
+  return all_unique(in_indices) and all_unique(out_indices)
+
+
 def state_tensor_evaluator(params):
   """
   ProblemParameters -> ([Int] -> [Int] -> Int)
