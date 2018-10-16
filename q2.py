@@ -16,6 +16,57 @@ def question02(cashFlowIn, cashFlowOut):
   return answer
 
 
+class ProblemParameters:
+  """
+  Stores the parameters relating to the problem in one place so they can
+  be passed around easily.
+  """
+
+  def __init__(self, unsorted_cash_flow_in, unsorted_cash_flow_out,
+      in_set_size, out_set_size):
+    """
+    [Int] -> [Int] -> Int -> Int -> ProblemParameters
+    """
+    self.unsorted_cash_flow_in = unsorted_cash_flow_in
+    self.unsorted_cash_flow_out = unsorted_cash_flow_out
+
+    self.cash_flow_in = sorted(self.unsorted_cash_flow_in)
+    self.cash_flow_out = sorted(self.unsorted_cash_flow_out)
+
+    self.in_flow_size = len(self.cash_flow_in)
+    self.out_flow_size = len(self.cash_flow_out)
+
+    self.in_set_size = in_set_size
+    self.out_set_size = out_set_size
+
+    self.unjoined_value_at = state_tensor_evaluator(
+      self.cash_flow_in, self.cash_flow_out)
+    self.value_at = joint_state_tensor_evaluator(self.unjoined_value_at,
+      self.in_set_size, self.out_set_size)
+
+  def change_set_sizes(self, new_in_set_size=None, new_out_set_size=None):
+    """
+    Int? -> Int? -> ProblemParameters
+    Create a new instance of the problem with different set sizes.
+    """
+    return ProblemParameters(self.unsorted_cash_flow_in,
+      self.unsorted_cash_flow_out, new_in_set_size or self.in_set_size,
+      new_out_set_size or self.out_set_size)
+
+
+def solve_by_state_tensor(cash_flow_in, cash_flow_out, m, n):
+  """
+  [Int] -> [Int] -> Int -> Int -> Int
+  Solve the problem for two specific cash flows by specifying the size
+  of set that will be taken from each cash flow.
+  """
+  evaluator = joint_state_tensor_evaluator(
+    state_tensor_evaluator(cash_flow_in, cash_flow_out), m, n)
+  optimiser = optimise_ordered_tensor(evaluator,
+    state_tensor_shape(cash_flow_in, cash_flow_out, m, n))
+  return optimiser([0] * (m + n), 0)
+
+
 def optimise_ordered_tensor(dereference_function, shape):
   """
   ([Int] -> Int) -> [Int] -> ([Int] -> Int -> Int)
@@ -32,12 +83,11 @@ def optimise_ordered_tensor(dereference_function, shape):
     Find the smallest non-negative value in the sub-tensor referenced
     by the given index and variable dimension.
     """
-    print(index, variable_dimension)
     value_at_index = dereference_function(index)
     if value_at_index >= 0:
       return value_at_index
 
-    if variable_dimension + 1 < len(shape):
+    if variable_dimension >= len(shape):
       # There are no more values to check (this tensor is a unit)
       return value_at_index if value_at_index >= 0 else MAX_INT
     
@@ -53,8 +103,7 @@ def optimise_ordered_tensor(dereference_function, shape):
     if value_at_stop_index >= 0:
       smallest_non_negative = value_at_stop_index
 
-    return min([optimise_ordered_tensor(i, variable_dimension + 1) \
-      for i in indices_to_check] + [smallest_non_negative])
+    return min([find_smallest_non_negative(i, variable_dimension + 1) for i in indices_to_check] + [smallest_non_negative])
 
   return find_smallest_non_negative
 
@@ -165,3 +214,12 @@ def split_list(ls, i):
   including i in separate lists.
   """
   return ls[:i], ls[i:]
+
+
+# Testing
+d1 = [66, 293, 215, 188, 147, 326, 449, 162, 46, 350]#dummy_set(30)
+d0 = [170, 153, 305, 290, 187]#dummy_set(30)
+M = 3
+N = 3
+print(sorted(d0), sorted(d1)[::-1])
+print(solve_by_state_tensor(d0, d1, M, N))
