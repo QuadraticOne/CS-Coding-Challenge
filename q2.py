@@ -42,7 +42,62 @@ def dummy_set(max_length=1000, max_transaction_size=100):
   length = randint(1, max_length)
   return [randint(1, max_transaction_size) for _ in range(length)]
 
-  
+
+class CashFlowController:
+  """
+  Contains algorithms that control a CashFlowTraverser in order to
+  try to get an optimal outcome.
+  """
+
+  def __init__(self, traverser):
+    """
+    CashFlowTraverser -> CashFlowController
+    """
+    self.traverser = traverser
+
+  def initial_traversal(self):
+    """
+    Perform the initial traversal, initially with 1 index for the ins
+    and then with 1 for ins and 1 for outs.
+    """
+    move_was_valid, _ = self.traverser.try_move([0], [])
+    move_was_valid, _ = self.traverser.try_move([0], [0])
+    while move_was_valid:
+      if self.traverser.current_state_value >= 0:
+        move_was_valid, _ = self.increment_out_index(0)
+      else:
+        move_was_valid, _ = self.increment_in_index(0)
+    return self.traverser.best_state_value
+
+  def increment_in_index(self, index_of_index):
+    """
+    Int -> (Bool, Int?)
+    Try to increment the index to the cash flow in indexed by the
+    given value, returning the result when the move is tried.
+    """
+    current_index = self.traverser.in_indices[index_of_index]
+    incremented = self.traverser.next_available_in_index(current_index)
+    if incremented is None:
+      return (False, None)
+    new_indices = self.traverser.in_indices[:]
+    new_indices[index_of_index] = incremented
+    return self.traverser.try_move(new_indices, self.traverser.out_indices)
+
+  def increment_out_index(self, index_of_index):
+    """
+    Int -> (Bool, Int?)
+    Try to increment the index to the cash flow out indexed by the
+    given value, returning the result when the move is tried.
+    """
+    current_index = self.traverser.out_indices[index_of_index]
+    incremented = self.traverser.next_available_out_index(current_index)
+    if incremented is None:
+      return (False, None)
+    new_indices = self.traverser.out_indices[:]
+    new_indices[index_of_index] = incremented
+    return self.traverser.try_move(self.traverser.in_indices, new_indices)
+
+
 class CashFlowTraverser:
   """
   Attempts to find the optimal solution to the problem by traversing
@@ -59,11 +114,11 @@ class CashFlowTraverser:
     self.n_in = len(cash_flow_in)
     self.n_out = len(cash_flow_out)
 
-    self.in_indices = [0]
-    self.out_indices = []
+    self.in_indices = None
+    self.out_indices = None
 
-    self.current_state_value = self.cash_flow_in[0]
-    self.best_state_value = self.current_state_value
+    self.current_state_value = None
+    self.best_state_value = -1
 
   def try_move(self, in_indices, out_indices):
     """
@@ -97,7 +152,8 @@ class CashFlowTraverser:
       sum([self.cash_flow_in[i] for i in self.in_indices]) - \
       sum([self.cash_flow_out[i] for i in self.out_indices])
 
-    if self.current_state_value < self.best_state_value \
+    if (self.current_state_value < self.best_state_value or
+        self.best_state_value < 0) \
       and self.current_state_value >= 0:
       self.best_state_value = self.current_state_value
 
@@ -148,5 +204,8 @@ def all_unique(ls):
   return len(ls) == len(set(ls))
 
 
-cft = CashFlowTraverser(dummy_set(), dummy_set())
-print(cft.try_move([1], [1]))
+# Testing
+cft = CashFlowTraverser(dummy_set(10), dummy_set(8))
+print(cft.cash_flow_in, cft.cash_flow_out)
+controller = CashFlowController(cft)
+print(controller.initial_traversal())
