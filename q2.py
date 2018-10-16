@@ -42,8 +42,7 @@ class ProblemParameters:
     self.state_tensor_shape = state_tensor_shape(self)
 
     self.unjoined_value_at = state_tensor_evaluator(self)
-    self.value_at = joint_state_tensor_evaluator(self.unjoined_value_at,
-      self.in_set_size, self.out_set_size)
+    self.value_at = joint_state_tensor_evaluator(self)
 
   def change_set_sizes(self, new_in_set_size=None, new_out_set_size=None):
     """
@@ -125,16 +124,16 @@ def state_tensor_evaluator(params):
   return evaluate
 
 
-def joint_state_tensor_evaluator(evaluator, m, n):
+def joint_state_tensor_evaluator(params):
   """
-  ([Int] -> [Int] -> Int) -> Int -> Int -> ([Int]) -> Int
+  ProblemParameters -> ([Int]) -> Int
   Take a function which evaluates a state tensor based on its in and
   out indices, and returns a function that does the same job but with
   one index list.
   """
   def split_index_and_evaluate(joint_indices):
-    in_indices, out_indices = split_list(joint_indices, m)
-    return evaluator(in_indices, out_indices)
+    in_indices, out_indices = split_list(joint_indices, params.in_set_size)
+    return params.unjoined_value_at(in_indices, out_indices)
   return split_index_and_evaluate
 
 
@@ -148,40 +147,29 @@ def state_tensor_shape(params):
     [len(params.cash_flow_out)] * params.out_set_size
 
 
-def tabulate_state_tensor(cash_flow_in, cash_flow_out, m, n):
+def tabulate_state_tensor(params):
   """
-  [Int] -> [Int] -> Int -> Int -> Tensor Int
+  ProblemParameters -> Tensor Int
   Evaluate the entirety of the state tensor for the given m and n,
   where m gives the number of in indices and n gives the number
   of out indices.
   """
-  shape = state_tensor_shape(cash_flow_in, cash_flow_out, m, n)
-  evaluator = state_tensor_evaluator(cash_flow_in, cash_flow_out)
-  def split_index_and_evaluate(joint_indices):
-    in_indices, out_indices = split_list(joint_indices, m)
-    return evaluator(in_indices, out_indices)
-  return iterate_tensor_indices(split_index_and_evaluate, shape)
+  return iterate_tensor_indices(params.value_at,
+    params.state_tensor_shape)
 
 
-def take_smallest_value(in_set, _):
+def check_for_intersection(params):
   """
-  Set Int -> Set Int -> Int
-  A naive but simple solution which takes the smallest element from
-  the cash flow in set and returns it.
-  """
-  return min(in_set)
-
-
-def check_for_intersection(in_set, out_set):
-  """
-  Set Int -> Set Int -> Int
+  ProblemParameters -> Int
   A naive but simple solution which checks whether there are any
   elements common to both sets, and returns 0 if there are.  If not,
   returns the smallest element from the in set.
   """
+  in_set = set(params.cash_flow_in)
+  out_set = set(params.cash_flow_out)
   if len(in_set.intersection(out_set)) > 0:
     return 0
-  return take_smallest_value(in_set, out_set)
+  return params.cash_flow_in[0]
 
 
 def dummy_set(max_length=1000, max_transaction_size=100):
@@ -217,6 +205,6 @@ def split_list(ls, i):
 
 # Testing
 ps = ProblemParameters([66, 293, 215, 188, 147, 326, 449, 162, 46, 350],
-  [170, 153, 305, 290, 187], 3, 3)
+  [170, 153, 305, 290, 187], 3, 2)
 print(ps.cash_flow_in, ps.cash_flow_out)
 print(solve_by_state_tensor(ps))
