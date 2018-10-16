@@ -10,9 +10,7 @@ MAX_INT = 999999999
 #compute all combinations for two portfolios
 def question02(cashFlowIn, cashFlowOut):
   # modify and then return the variable below
-  cash_flow_in = set(cashFlowIn)
-  cash_flow_out = set(cashFlowOut)
-  answer = check_for_intersection(cash_flow_in, cash_flow_out)
+  answer = solve_by_state_tensor(cash_flow_in, cash_flow_out, 2, 2)
   return answer
 
 
@@ -40,6 +38,7 @@ class ProblemParameters:
     self.out_set_size = out_set_size
 
     self.state_tensor_shape = state_tensor_shape(self)
+    self.state_tensor_rank = len(self.state_tensor_shape)
 
     self.unjoined_value_at = state_tensor_evaluator(self)
     self.value_at = joint_state_tensor_evaluator(self)
@@ -60,56 +59,35 @@ def solve_by_state_tensor(params):
   Solve the problem for two specific cash flows by specifying the size
   of set that will be taken from each cash flow.
   """
-  optimiser = optimise_ordered_tensor(params.value_at,
-    params.state_tensor_shape)
-  return optimiser([0] * (params.in_set_size + params.out_set_size), 0)
+  return find_smallest_non_negative(params, [0] * params.state_tensor_rank, 0)
 
 
-def optimise_ordered_tensor(dereference_function, shape):
+def find_smallest_non_negative(params, index, variable_dimension):
   """
-  ([Int] -> Int) -> [Int] -> ([Int] -> Int -> Int)
-  Produce a function which, when given an index and relevant dimension
-  to change, finds the smallest non-negative value in the tensor, where
-  the tensor is defined by the given dereference function which exists
-  for the specified shape.  Assumes that the dereference function is
-  defined such that an increase in any of the indices will result in
-  an increase in the return value.
+  ProblemParameters -> [Int] -> Int -> Int
+  Given a ProblemParameters object describing a state tensor, find the
+  smallest non-negative value in the sub-tensor referenced by the given
+  index.  This function assumes that the derivative of value with
+  respect to the index is always non-negative regardless of the
+  dimension being incremented.  Return MAX_INT if there are no non-
+  negative values in the sub-tensor.
   """
-  def find_smallest_non_negative(index, variable_dimension):
-    """
-    [Int] -> Int -> Int
-    Find the smallest non-negative value in the sub-tensor referenced
-    by the given index and variable dimension.
-    """
-    value_at_index = dereference_function(index)
-    if value_at_index >= 0:
-      return value_at_index
-
-    if variable_dimension >= len(shape):
-      # There are no more values to check (this tensor is a unit)
-      return value_at_index if value_at_index >= 0 else MAX_INT
-    
-    indices_to_check = []
-    current_index = index[:]
-    smallest_non_negative = MAX_INT
-    while current_index[variable_dimension] < shape[variable_dimension] \
-      and dereference_function(index) < 0:
-      indices_to_check.append(current_index[:])
-      current_index[variable_dimension] = current_index[variable_dimension] + 1
-    
-    value_at_stop_index = dereference_function(index)
-    if value_at_stop_index >= 0:
-      smallest_non_negative = value_at_stop_index
-
-    return min([find_smallest_non_negative(i, variable_dimension + 1) \
-      for i in indices_to_check] + [smallest_non_negative])
-
-  return find_smallest_non_negative
+  index_value = params.value_at(index)
+  if variable_dimension >= params.state_tensor_rank or index_value >= 0:
+    return index_value if index_value >= 0 else MAX_INT
+  negative_indices, first_positive = negatives_and_first_positive(
+    params, index, variable_dimension)
+  return min([find_smallest_non_negative(params, i, variable_dimension + 1) \
+    for i in negative_indices] + [first_positive])
 
 
 def negatives_and_first_positive(params, index, variable_dimension):
   """
   ProblemParameters -> [Int] -> Int -> ([[Int], Int])
+  By varying the given dimension of an index to a state tensor, find
+  all the negative elements until a positive occurs and return their
+  indices along with the positive value.  If no positive values are
+  found then MAX_INT will be returned for the positive value instead.
   """
   iterator = iterated_dimension(params, index, variable_dimension)
   negatives = []
@@ -151,30 +129,24 @@ def iterated_dimension(params, index, variable_dimension):
   return dimension_at
 
 
-def has_repeated_indices_per_flow(params, index):
-  """
-  ProblemParameters -> [Int] -> Bool
-  Determines whether the given index, if split into corresponding
-  indices for inward and outward cash flows, contains any repeated
-  values, making it an illegal index.
-  """
-  in_indices, out_indices = split_list(index, params.in_set_size)
-  def all_unique(ls):
-    return len(set(ls)) == len(ls)
-  return all_unique(in_indices) and all_unique(out_indices)
-
-
 def state_tensor_evaluator(params):
   """
   ProblemParameters -> ([Int] -> [Int] -> Int)
   Return a function that takes a set of indices and outputs the value
-  of the state tensor at that position.
+  of the state tensor at that position.  If the index is illegal, returns
+  a very large negative number.
   """
+  def all_unique(ls):
+    return len(set(ls)) == len(ls)
+
   def evaluate(in_indices, out_indices):
     """
     [Int] -> [Int] -> Int
     Evaluate the state tensor at the given position.
     """
+    if (not all_unique(in_indices)) or (not all_unique(out_indices)):
+      return -MAX_INT
+
     return sum([params.cash_flow_in[i] for i in in_indices]) - \
       sum([params.cash_flow_out[params.out_flow_size - j - 1] \
       for j in out_indices])
@@ -261,14 +233,5 @@ def split_list(ls, i):
 
 
 # Testing
-ps = ProblemParameters([66, 293, 215, 188, 147, 326, 449, 162, 46, 350],
-  [170, 153, 305, 290, 187], 3, 2)
-# print(ps.cash_flow_in, ps.cash_flow_out)
-# print(solve_by_state_tensor(ps))
-
-ind = [0, 6, 0, 0, 0]
-f = iterated_dimension(ps, ind, 0)
-for i in range(20):
-  print(f(i))
-
-print(negatives_and_first_positive(ps, ind, 0))
+ps = ProblemParameters(dummy_set(20), dummy_set(20), 2, 2)
+print(solve_by_state_tensor(ps))
