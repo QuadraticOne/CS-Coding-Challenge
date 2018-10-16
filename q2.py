@@ -21,9 +21,9 @@ class ProblemParameters:
   """
 
   def __init__(self, unsorted_cash_flow_in, unsorted_cash_flow_out,
-      in_set_size, out_set_size):
+      in_set_size=1, out_set_size=8):
     """
-    [Int] -> [Int] -> Int -> Int -> ProblemParameters
+    [Int] -> [Int] -> Int? -> Int? -> ProblemParameters
     """
     self.unsorted_cash_flow_in = unsorted_cash_flow_in
     self.unsorted_cash_flow_out = unsorted_cash_flow_out
@@ -43,14 +43,13 @@ class ProblemParameters:
     self.unjoined_value_at = state_tensor_evaluator(self)
     self.value_at = joint_state_tensor_evaluator(self)
 
-  def change_set_sizes(self, new_in_set_size=None, new_out_set_size=None):
+  def change_set_sizes(self, new_in_set_size, new_out_set_size):
     """
     Int? -> Int? -> ProblemParameters
     Create a new instance of the problem with different set sizes.
     """
     return ProblemParameters(self.unsorted_cash_flow_in,
-      self.unsorted_cash_flow_out, new_in_set_size or self.in_set_size,
-      new_out_set_size or self.out_set_size)
+      self.unsorted_cash_flow_out, new_in_set_size, new_out_set_size)
 
 
 def solve_by_state_tensor(params):
@@ -59,7 +58,19 @@ def solve_by_state_tensor(params):
   Solve the problem for two specific cash flows by specifying the size
   of set that will be taken from each cash flow.
   """
-  return find_smallest_non_negative(params, [0] * params.state_tensor_rank, 0)
+  _params = params
+  set_sizes = set_size_combinations(params, lambda p: p[0] + p[1])
+  least = MAX_INT
+  for in_set_size, out_set_size in set_sizes:
+    _params = _params.change_set_sizes(in_set_size, out_set_size)
+    candidate = find_smallest_non_negative(_params,
+      [0] * (in_set_size + out_set_size), 0)
+    if candidate == 0:
+      return 0
+    elif candidate < least:
+      least = candidate
+  return least
+  # return find_smallest_non_negative(params, [0] * params.state_tensor_rank, 0)
 
 
 def find_smallest_non_negative(params, index, variable_dimension):
@@ -245,3 +256,24 @@ def split_list(ls, i):
   including i in separate lists.
   """
   return ls[:i], ls[i:]
+
+
+def set_size_combinations(params, ordering):
+  """
+  ProblemParameters -> ((Int, Int) -> Num) -> [(Int, Int)]
+  Return all valid combinations of set sizes that could be used to extract
+  values from the cash flows.  They will be put in ascending order of their
+  value when passed as an argument of the given function.
+  """
+  in_values = range(1, params.in_flow_size)
+  out_values = range(params.out_flow_size)
+  pairs = []
+  for i in in_values:
+    for j in out_values:
+      pairs.append((i, j))
+  return sorted(pairs, key=ordering)
+
+
+# Testing
+ps = ProblemParameters(dummy_set(30), dummy_set(30), 1, 1)
+print(solve_by_state_tensor(ps))
