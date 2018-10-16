@@ -77,8 +77,23 @@ def find_smallest_non_negative(params, index, variable_dimension):
     return index_value if index_value >= 0 else MAX_INT
   negative_indices, first_positive = negatives_and_first_positive(
     params, index, variable_dimension)
-  return min([find_smallest_non_negative(params, i, variable_dimension + 1) \
-    for i in negative_indices] + [first_positive])
+
+  # Find the minimum of each candidate index and the positive value;
+  # if a zero is found it can be returned immediately without evaluating
+  # the rest
+  if first_positive == 0:
+    return 0
+  else:
+    least = first_positive
+    for i in negative_indices:
+      i_value = find_smallest_non_negative(params, i, variable_dimension + 1)
+      if i_value == 0:
+        return 0
+      elif i_value < least:
+        least = i_value
+  return least
+  # return min([find_smallest_non_negative(params, i, variable_dimension + 1) \
+  #   for i in negative_indices] + [first_positive])
 
 
 def negatives_and_first_positive(params, index, variable_dimension):
@@ -230,8 +245,3 @@ def split_list(ls, i):
   including i in separate lists.
   """
   return ls[:i], ls[i:]
-
-
-# Testing
-ps = ProblemParameters(dummy_set(20), dummy_set(20), 2, 2)
-print(solve_by_state_tensor(ps))
