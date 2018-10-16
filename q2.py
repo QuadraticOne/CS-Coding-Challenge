@@ -3,6 +3,10 @@
 import numpy as np
 from random import randint
 
+
+MAX_INT = 999999999
+
+
 #compute all combinations for two portfolios
 def question02(cashFlowIn, cashFlowOut):
   # modify and then return the variable below
@@ -10,6 +14,105 @@ def question02(cashFlowIn, cashFlowOut):
   cash_flow_out = set(cashFlowOut)
   answer = check_for_intersection(cash_flow_in, cash_flow_out)
   return answer
+
+
+def optimise_ordered_tensor(dereference_function, shape):
+  """
+  ([Int] -> Int) -> [Int] -> ([Int] -> Int -> Int)
+  Produce a function which, when given an index and relevant dimension
+  to change, finds the smallest non-negative value in the tensor, where
+  the tensor is defined by the given dereference function which exists
+  for the specified shape.  Assumes that the dereference function is
+  defined such that an increase in any of the indices will result in
+  an increase in the return value.
+  """
+  def find_smallest_non_negative(index, variable_dimension):
+    """
+    [Int] -> Int -> Int
+    Find the smallest non-negative value in the sub-tensor referenced
+    by the given index and variable dimension.
+    """
+    print(index, variable_dimension)
+    value_at_index = dereference_function(index)
+    if value_at_index >= 0:
+      return value_at_index
+
+    if variable_dimension + 1 < len(shape):
+      # There are no more values to check (this tensor is a unit)
+      return value_at_index if value_at_index >= 0 else MAX_INT
+    
+    indices_to_check = []
+    current_index = index[:]
+    smallest_non_negative = MAX_INT
+    while current_index[variable_dimension] < shape[variable_dimension] \
+      and dereference_function(index) < 0:
+      indices_to_check.append(current_index[:])
+      current_index[variable_dimension] = current_index[variable_dimension] + 1
+    
+    value_at_stop_index = dereference_function(index)
+    if value_at_stop_index >= 0:
+      smallest_non_negative = value_at_stop_index
+
+    return min([optimise_ordered_tensor(i, variable_dimension + 1) \
+      for i in indices_to_check] + [smallest_non_negative])
+
+  return find_smallest_non_negative
+
+
+def state_tensor_evaluator(cash_flow_in, cash_flow_out):
+  """
+  [Int] -> [Int] -> ([Int] -> [Int] -> Int)
+  Return a function that takes a set of indices and outputs the value
+  of the state tensor at that position.
+  """
+  n_out = len(cash_flow_out)
+  ci = sorted(list(cash_flow_in))
+  co = sorted(list(cash_flow_out))
+  def evaluate(in_indices, out_indices):
+    """
+    [Int] -> [Int] -> Int
+    Evaluate the state tensor at the given position.
+    """
+    return sum([ci[i] for i in in_indices]) - \
+      sum([co[n_out - j - 1] for j in out_indices])
+  return evaluate
+
+
+def joint_state_tensor_evaluator(evaluator, m, n):
+  """
+  ([Int] -> [Int] -> Int) -> Int -> Int -> ([Int]) -> Int
+  Take a function which evaluates a state tensor based on its in and
+  out indices, and returns a function that does the same job but with
+  one index list.
+  """
+  def split_index_and_evaluate(joint_indices):
+    in_indices, out_indices = split_list(joint_indices, m)
+    return evaluator(in_indices, out_indices)
+  return split_index_and_evaluate
+
+
+def state_tensor_shape(cash_flow_in, cash_flow_out, m, n):
+  """
+  [Int] -> [Int] -> Int -> Int -> [Int]
+  Find the shape of the state tensor for the given cash flows and
+  number of in and out indices.
+  """
+  return [len(cash_flow_in)] * m + [len(cash_flow_out)] * n
+
+
+def tabulate_state_tensor(cash_flow_in, cash_flow_out, m, n):
+  """
+  [Int] -> [Int] -> Int -> Int -> Tensor Int
+  Evaluate the entirety of the state tensor for the given m and n,
+  where m gives the number of in indices and n gives the number
+  of out indices.
+  """
+  shape = state_tensor_shape(cash_flow_in, cash_flow_out, m, n)
+  evaluator = state_tensor_evaluator(cash_flow_in, cash_flow_out)
+  def split_index_and_evaluate(joint_indices):
+    in_indices, out_indices = split_list(joint_indices, m)
+    return evaluator(in_indices, out_indices)
+  return iterate_tensor_indices(split_index_and_evaluate, shape)
 
 
 def take_smallest_value(in_set, _):
@@ -43,169 +146,22 @@ def dummy_set(max_length=1000, max_transaction_size=100):
   return [randint(1, max_transaction_size) for _ in range(length)]
 
 
-class CashFlowController:
+def iterate_tensor_indices(f, shape):
   """
-  Contains algorithms that control a CashFlowTraverser in order to
-  try to get an optimal outcome.
+  ([Int] -> a) -> [Int] -> Tensor a
+  Iterate over all the indices of a tensor of the given shape,
+  mapping the tensor to a function of each index.
   """
-
-  def __init__(self, traverser):
-    """
-    CashFlowTraverser -> CashFlowController
-    """
-    self.traverser = traverser
-
-  def initial_traversal(self):
-    """
-    Perform the initial traversal, initially with 1 index for the ins
-    and then with 1 for ins and 1 for outs.
-    """
-    move_was_valid, _ = self.traverser.try_move([0], [])
-    move_was_valid, _ = self.traverser.try_move([0], [0])
-    while move_was_valid:
-      if self.traverser.current_state_value >= 0:
-        move_was_valid, _ = self.increment_out_index(0)
-      else:
-        move_was_valid, _ = self.increment_in_index(0)
-    return self.traverser.best_state_value
-
-  def increment_in_index(self, index_of_index):
-    """
-    Int -> (Bool, Int?)
-    Try to increment the index to the cash flow in indexed by the
-    given value, returning the result when the move is tried.
-    """
-    current_index = self.traverser.in_indices[index_of_index]
-    incremented = self.traverser.next_available_in_index(current_index)
-    if incremented is None:
-      return (False, None)
-    new_indices = self.traverser.in_indices[:]
-    new_indices[index_of_index] = incremented
-    return self.traverser.try_move(new_indices, self.traverser.out_indices)
-
-  def increment_out_index(self, index_of_index):
-    """
-    Int -> (Bool, Int?)
-    Try to increment the index to the cash flow out indexed by the
-    given value, returning the result when the move is tried.
-    """
-    current_index = self.traverser.out_indices[index_of_index]
-    incremented = self.traverser.next_available_out_index(current_index)
-    if incremented is None:
-      return (False, None)
-    new_indices = self.traverser.out_indices[:]
-    new_indices[index_of_index] = incremented
-    return self.traverser.try_move(self.traverser.in_indices, new_indices)
+  if len(shape) == 0:
+    return f([])
+  return [iterate_tensor_indices(lambda j: f([i] + j), shape[1:]) \
+    for i in range(shape[0])]
 
 
-class CashFlowTraverser:
+def split_list(ls, i):
   """
-  Attempts to find the optimal solution to the problem by traversing
-  the sets in a structured way.
+  [a] -> Int -> ([a], [a])
+  Return all elements up until i and all elements after and
+  including i in separate lists.
   """
-
-  def __init__(self, cash_flow_in, cash_flow_out):
-    """
-    [Int] -> [Int] -> CashFlowController
-    """
-    self.cash_flow_in = sorted(list(cash_flow_in))
-    self.cash_flow_out = sorted(list(cash_flow_out))
-
-    self.n_in = len(cash_flow_in)
-    self.n_out = len(cash_flow_out)
-
-    self.in_indices = None
-    self.out_indices = None
-
-    self.current_state_value = None
-    self.best_state_value = -1
-
-  def try_move(self, in_indices, out_indices):
-    """
-    [Int] -> [Int] -> (Bool, Int?)
-    Try to move to the given state.  Returns True if the move was valid
-    and was executed.  If the integer component of the return value is
-    not None, there are no more possible moves and the best state
-    obtained will has been given.
-    """
-    if len(in_indices) > self.n_in or len(out_indices) > self.n_out:
-      return (False, self.best_state_value)
-    
-    if self.is_state_valid(in_indices, out_indices):
-      self.in_indices = in_indices
-      self.out_indices = out_indices
-      self.set_state_value()
-      if self.best_state_value == 0:
-        return (True, 0)
-      else:
-        return (True, None)
-    else:
-      return (False, None)
-
-  def set_state_value(self):
-    """
-    () -> ()
-    Calculates the value of the current state, and updates the best
-    state value if necessary.
-    """
-    self.current_state_value = \
-      sum([self.cash_flow_in[i] for i in self.in_indices]) - \
-      sum([self.cash_flow_out[i] for i in self.out_indices])
-
-    if (self.current_state_value < self.best_state_value or
-        self.best_state_value < 0) \
-      and self.current_state_value >= 0:
-      self.best_state_value = self.current_state_value
-
-  def is_state_valid(self, in_indices, out_indices):
-    """
-    [Int] -> [Int] -> Bool
-    Determine whether or not the given state is valid.
-    """
-    return \
-      all([0 <= i < self.n_in for i in in_indices]) and \
-      all([0 <= i < self.n_out for i in out_indices]) and \
-      all_unique(in_indices) and all_unique(out_indices)
-
-  def next_available_in_index(self, i):
-    """
-    Int -> Int?
-    Return the next available index in the cash flow in that is either
-    equal to or greater than the given index.  Returns None if there
-    are no available indices.
-    """
-    if i >= self.n_in:
-      return None
-    elif i not in self.in_indices:
-      return i
-    else:
-      return self.next_available_in_index(i + 1)
-
-  def next_available_out_index(self, i):
-    """
-    Int -> Int?
-    Return the next available index in the cash flow out that is either
-    equal to or greater than the given index.  Returns None if there
-    are no available indices.
-    """
-    if i >= self.n_out:
-      return None
-    elif i not in self.out_indices:
-      return i
-    else:
-      return self.next_available_out_index(i + 1)
-
-
-def all_unique(ls):
-  """
-  [a] -> Bool
-  Determine whether the list contains only unique elements.
-  """
-  return len(ls) == len(set(ls))
-
-
-# Testing
-cft = CashFlowTraverser(dummy_set(10), dummy_set(8))
-print(cft.cash_flow_in, cft.cash_flow_out)
-controller = CashFlowController(cft)
-print(controller.initial_traversal())
+  return ls[:i], ls[i:]
