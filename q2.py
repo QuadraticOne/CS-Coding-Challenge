@@ -39,8 +39,9 @@ class ProblemParameters:
     self.in_set_size = in_set_size
     self.out_set_size = out_set_size
 
-    self.unjoined_value_at = state_tensor_evaluator(
-      self.cash_flow_in, self.cash_flow_out)
+    self.state_tensor_shape = state_tensor_shape(self)
+
+    self.unjoined_value_at = state_tensor_evaluator(self)
     self.value_at = joint_state_tensor_evaluator(self.unjoined_value_at,
       self.in_set_size, self.out_set_size)
 
@@ -54,17 +55,15 @@ class ProblemParameters:
       new_out_set_size or self.out_set_size)
 
 
-def solve_by_state_tensor(cash_flow_in, cash_flow_out, m, n):
+def solve_by_state_tensor(params):
   """
-  [Int] -> [Int] -> Int -> Int -> Int
+  ProblemParameters -> Int
   Solve the problem for two specific cash flows by specifying the size
   of set that will be taken from each cash flow.
   """
-  evaluator = joint_state_tensor_evaluator(
-    state_tensor_evaluator(cash_flow_in, cash_flow_out), m, n)
-  optimiser = optimise_ordered_tensor(evaluator,
-    state_tensor_shape(cash_flow_in, cash_flow_out, m, n))
-  return optimiser([0] * (m + n), 0)
+  optimiser = optimise_ordered_tensor(params.value_at,
+    params.state_tensor_shape)
+  return optimiser([0] * (params.in_set_size + params.out_set_size), 0)
 
 
 def optimise_ordered_tensor(dereference_function, shape):
@@ -103,27 +102,26 @@ def optimise_ordered_tensor(dereference_function, shape):
     if value_at_stop_index >= 0:
       smallest_non_negative = value_at_stop_index
 
-    return min([find_smallest_non_negative(i, variable_dimension + 1) for i in indices_to_check] + [smallest_non_negative])
+    return min([find_smallest_non_negative(i, variable_dimension + 1) \
+      for i in indices_to_check] + [smallest_non_negative])
 
   return find_smallest_non_negative
 
 
-def state_tensor_evaluator(cash_flow_in, cash_flow_out):
+def state_tensor_evaluator(params):
   """
-  [Int] -> [Int] -> ([Int] -> [Int] -> Int)
+  ProblemParameters -> ([Int] -> [Int] -> Int)
   Return a function that takes a set of indices and outputs the value
   of the state tensor at that position.
   """
-  n_out = len(cash_flow_out)
-  ci = sorted(list(cash_flow_in))
-  co = sorted(list(cash_flow_out))
   def evaluate(in_indices, out_indices):
     """
     [Int] -> [Int] -> Int
     Evaluate the state tensor at the given position.
     """
-    return sum([ci[i] for i in in_indices]) - \
-      sum([co[n_out - j - 1] for j in out_indices])
+    return sum([params.cash_flow_in[i] for i in in_indices]) - \
+      sum([params.cash_flow_out[params.out_flow_size - j - 1] \
+      for j in out_indices])
   return evaluate
 
 
@@ -140,13 +138,14 @@ def joint_state_tensor_evaluator(evaluator, m, n):
   return split_index_and_evaluate
 
 
-def state_tensor_shape(cash_flow_in, cash_flow_out, m, n):
+def state_tensor_shape(params):
   """
-  [Int] -> [Int] -> Int -> Int -> [Int]
+  ProblemParameters -> [Int]
   Find the shape of the state tensor for the given cash flows and
   number of in and out indices.
   """
-  return [len(cash_flow_in)] * m + [len(cash_flow_out)] * n
+  return [len(params.cash_flow_in)] * params.in_set_size + \
+    [len(params.cash_flow_out)] * params.out_set_size
 
 
 def tabulate_state_tensor(cash_flow_in, cash_flow_out, m, n):
@@ -217,9 +216,7 @@ def split_list(ls, i):
 
 
 # Testing
-d1 = [66, 293, 215, 188, 147, 326, 449, 162, 46, 350]#dummy_set(30)
-d0 = [170, 153, 305, 290, 187]#dummy_set(30)
-M = 3
-N = 3
-print(sorted(d0), sorted(d1)[::-1])
-print(solve_by_state_tensor(d0, d1, M, N))
+ps = ProblemParameters([66, 293, 215, 188, 147, 326, 449, 162, 46, 350],
+  [170, 153, 305, 290, 187], 3, 3)
+print(ps.cash_flow_in, ps.cash_flow_out)
+print(solve_by_state_tensor(ps))
