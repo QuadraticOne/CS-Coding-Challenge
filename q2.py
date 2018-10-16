@@ -107,9 +107,28 @@ def optimise_ordered_tensor(dereference_function, shape):
   return find_smallest_non_negative
 
 
+def negatives_and_first_positive(params, index, variable_dimension):
+  """
+  ProblemParameters -> [Int] -> Int -> ([[Int], Int])
+  """
+  iterator = iterated_dimension(params, index, variable_dimension)
+  negatives = []
+  i = 0
+  while True:
+    index, value = iterator(i)
+    if value is None:
+      break
+    elif value < 0:
+      negatives.append(index)
+      i += 1
+    else:
+      return (negatives, value)
+  return (negatives, MAX_INT)
+
+
 def iterated_dimension(params, index, variable_dimension):
   """
-  ProblemParameters -> [Int] -> Int -> (Int -> ([Int], Int)?)
+  ProblemParameters -> [Int] -> Int -> (Int -> ([Int]?, Int?))
   Return a function which, given an input integer, returns an index
   within the state tensor along with its state value, or None if the
   dimension's limit has been exceeded.  The index of this new function
@@ -124,7 +143,7 @@ def iterated_dimension(params, index, variable_dimension):
     Int -> ([Int], Int)?
     """
     if i >= out_of_bounds_index:
-      return None
+      return (None, None)
     else:
       current_index = index[:]
       current_index[variable_dimension] = index[variable_dimension] + i
@@ -244,5 +263,12 @@ def split_list(ls, i):
 # Testing
 ps = ProblemParameters([66, 293, 215, 188, 147, 326, 449, 162, 46, 350],
   [170, 153, 305, 290, 187], 3, 2)
-print(ps.cash_flow_in, ps.cash_flow_out)
-print(solve_by_state_tensor(ps))
+# print(ps.cash_flow_in, ps.cash_flow_out)
+# print(solve_by_state_tensor(ps))
+
+ind = [0, 6, 0, 0, 0]
+f = iterated_dimension(ps, ind, 0)
+for i in range(20):
+  print(f(i))
+
+print(negatives_and_first_positive(ps, ind, 0))
