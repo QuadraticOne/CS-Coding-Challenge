@@ -10,7 +10,7 @@ MAX_INT = 999999999
 #compute all combinations for two portfolios
 def question02(cashFlowIn, cashFlowOut):
   # modify and then return the variable below
-  answer = solve_by_state_tensor(cash_flow_in, cash_flow_out, 2, 2)
+  answer = solve_by_state_tensor(ProblemParameters(cashFlowIn, cashFlowOut))
   return answer
 
 
