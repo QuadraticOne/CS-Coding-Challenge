@@ -61,7 +61,8 @@ def solve_by_state_tensor(params):
   _params = params
   set_sizes = set_size_combinations(params, lambda p: p[0] + p[1])
   least = MAX_INT
-  for in_set_size, out_set_size in set_sizes:
+  while len(set_sizes) > 0:
+    in_set_size, out_set_size = set_sizes[0]
     _params = _params.change_set_sizes(in_set_size, out_set_size)
     candidate = find_smallest_non_negative(_params,
       [0] * (in_set_size + out_set_size), 0)
@@ -69,8 +70,14 @@ def solve_by_state_tensor(params):
       return 0
     elif candidate < least:
       least = candidate
+    
+    del set_sizes[0]
+
+    # Prune possible pairs based on the result of this pair
+    if candidate == MAX_INT:
+      remove_from_list(set_sizes, lambda p: p[0] == in_set_size and \
+        p[1] > out_set_size)
   return least
-  # return find_smallest_non_negative(params, [0] * params.state_tensor_rank, 0)
 
 
 def find_smallest_non_negative(params, index, variable_dimension):
@@ -103,8 +110,6 @@ def find_smallest_non_negative(params, index, variable_dimension):
       elif i_value < least:
         least = i_value
   return least
-  # return min([find_smallest_non_negative(params, i, variable_dimension + 1) \
-  #   for i in negative_indices] + [first_positive])
 
 
 def negatives_and_first_positive(params, index, variable_dimension):
@@ -258,6 +263,18 @@ def split_list(ls, i):
   return ls[:i], ls[i:]
 
 
+def remove_from_list(ls, predicate):
+  """
+  [a] -> (a -> Bool) -> ()
+  Remove elements which satisfy the predicate from the list, in place.
+  """
+  i = len(ls)
+  while i > 0:
+    i -= 1
+    if predicate(ls[i]):
+      del ls[i]
+
+
 def set_size_combinations(params, ordering):
   """
   ProblemParameters -> ((Int, Int) -> Num) -> [(Int, Int)]
@@ -265,8 +282,8 @@ def set_size_combinations(params, ordering):
   values from the cash flows.  They will be put in ascending order of their
   value when passed as an argument of the given function.
   """
-  in_values = range(1, params.in_flow_size)
-  out_values = range(params.out_flow_size)
+  in_values = range(1, params.in_flow_size + 1)
+  out_values = range(params.out_flow_size + 1)
   pairs = []
   for i in in_values:
     for j in out_values:
@@ -274,6 +291,11 @@ def set_size_combinations(params, ordering):
   return sorted(pairs, key=ordering)
 
 
-# Testing
-ps = ProblemParameters(dummy_set(30), dummy_set(30), 1, 1)
-print(solve_by_state_tensor(ps))
+def run_tests():
+  test_a = ProblemParameters([66, 293, 215, 188, 147, 326, 449, 162, 46, 350],
+    [170, 153, 305, 290, 187])
+  assert(solve_by_state_tensor(test_a) == 0)
+  test_b = ProblemParameters([189, 28], [43, 267, 112, 166], 2, 2)
+  assert(solve_by_state_tensor(test_b) == 8)
+  test_c = ProblemParameters([72, 24, 73, 4, 28, 56, 1, 43], [27])
+  assert(solve_by_state_tensor(test_c) == 1)
