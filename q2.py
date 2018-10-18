@@ -291,6 +291,35 @@ def set_size_combinations(params, ordering):
   return sorted(pairs, key=ordering)
 
 
+class ValueType:
+  NEGATIVE = 0
+  NON_NEGATIVE = 1
+  ILLEGAL_INDEX = 2
+
+
+def lazy_tensor_properties(params, index, variable_dimension):
+  """
+  ProblemParameters -> [Int] -> Int -> (Bool, Int?)
+  Given values defining a lazily evaluated subtensor whose elements'
+  derivatives wrt. indices are assumed to be positive, determine some
+  properties of the tensor and return them.  The first property is
+  whether or not every element in the subtensor are either non-negative
+  or undefined (due to an illegal index), while the second property
+  is the smallest non-negative value if there was one, some negative
+  value if there were no non-negative values, or None if every element
+  in the subtensor had an illegal index.
+  """
+  rank = variable_dimension - len(index)
+  if rank == 0:
+    pass
+  if rank == 1:
+    pass
+  else:
+    pass
+
+  raise NotImplementedError()
+
+
 def run_tests():
   test_a = ProblemParameters([66, 293, 215, 188, 147, 326, 449, 162, 46, 350],
     [170, 153, 305, 290, 187])
