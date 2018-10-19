@@ -88,6 +88,113 @@ class LazyStateTensor:
       i += 1
     return True
 
+  def subtensor_properties(self, index, variable_dimension):
+    """
+    [Int] -> Int -> (Bool, Int?)
+    Given a specific subtensor within the state tensor, determine whether
+    or not it only contains non-negative entries and its key entry.  A
+    subtensor is said to contain only non-negative entries if evaluating
+    every index would yield only values that are >= 0 or illegal.  The
+    key entry will be the smallest non-negative value if it contains any,
+    otherwise it will be some negative value from the subtensor.  If all
+    indices within the subtensor are illegal, the key value will be None.
+
+    If an index is found whose value is zero, it will be returned
+    immediately.  In this case, the boolean indicator will be None.
+    """
+    # TODO: refactor into smaller functions
+    subtensor_rank = self.rank - variable_dimension
+    if subtensor_rank >= 2:
+      iterator = self.subtensor_iterator(index, variable_dimension)
+      i = 0
+      is_all_non_negative = True
+      highest_priority_value = None
+      while True:
+        current_index = iterator(i)
+        if current_index is None:
+          break
+        current_value = self.evaluate(current_index)
+        if current_value is None:
+          subtensor_positive, subtensor_highest_priority = \
+            self.subtensor_properties(current_index, variable_dimension + 1)
+          if subtensor_highest_priority == 0:
+            return (None, 0)
+          is_all_non_negative = is_all_non_negative and subtensor_positive
+          highest_priority_value = self.highest_priority(
+            highest_priority_value, subtensor_highest_priority)
+        elif current_value < 0:
+          _, subtensor_highest_priority = \
+            self.subtensor_properties(current_index, variable_dimension + 1)
+          if subtensor_highest_priority == 0:
+            return (None, 0)
+          is_all_non_negative = False
+          highest_priority_value = self.highest_priority(
+            highest_priority_value, subtensor_highest_priority)
+        else:  # Current value is non-negative
+          if current_value == 0:
+            return (None, 0)
+          highest_priority_value = self.highest_priority(
+            highest_priority_value, current_value)
+          break
+        i += 1
+      return (is_all_non_negative, highest_priority_value)
+    elif subtensor_rank == 1:
+      iterator = self.subtensor_iterator(index, variable_dimension)
+      i = 0
+      is_all_non_negative = True
+      highest_priority_value = None
+      while True:
+        current_index = iterator(i)
+        if current_index is None:
+          break
+        current_value = self.evaluate(current_index)
+        if current_value is not None:
+          if current_value < 0:
+            is_all_non_negative = False
+          elif current_value == 0:
+            return (None, 0)
+          highest_priority_value = self.highest_priority(
+            highest_priority_value, current_value)
+        i += 1
+      return (is_all_non_negative, highest_priority_value)
+    else:
+      # Rank is 0; should only be reached in edge cases
+      value = self.evaluate(index)
+      if value > 0 or value is None:
+        return (True, value)
+      elif value < 0:
+        return (False, value)
+      else:
+        return (None, 0)
+
+  def highest_priority(self, a, b):
+    """
+    Maybe Int -> Maybe Int -> Maybe Int
+    Compare two values, returning the one with the highest priorty.  Non-
+    negative integers have the highest priority, with the lowest of two
+    non-negative numbers having the greater of the two.  Negative numbers
+    have higher priority than None values (illegal indices), both of which
+    have lower priority than non-negative integers.
+    """
+    if self.priority(a) > self.priority(b):
+      return a
+    else:
+      return b
+
+  def priority(self, n):
+    """
+    Maybe Int -> Int
+    Calculate the priority of the value, defined as -1 if the value is
+    None, 0 if the value is negative, and 1 / (1 + n) otherwise.
+    """
+    # TODO: is this really the most efficient definition or priority?
+    if n is None:
+      return -1
+    elif n < 0:
+      return 0
+    else:
+      return 1. / (1 + n)
+
   def subtensor_iterator(self, index, variable_dimension):
     """
     [Int] -> Int -> (Int -> [Int]?)
@@ -114,5 +221,5 @@ def run_tests():
 
 
 lst = LazyStateTensor(sorted([66, 293, 215, 188, 147, 326, 449, 162, 46, 350]),
-  sorted([170, 153, 305, 290, 187])[::-1], 1, 0)
-it = lst.subtensor_iterator([0], 0)
+  sorted([170, 153, 305, 290, 187])[::-1], 3, 3)
+print(lst.subtensor_properties([0, 0, 0, 0, 0, 0], 0))
