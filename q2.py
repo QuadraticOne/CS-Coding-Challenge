@@ -31,6 +31,7 @@ class LazyStateTensor:
     self.out_subset_size = None
 
     self.rank = None
+    self.shape = None
 
     self.set_subset_sizes(in_subset_size, out_subset_size)
 
@@ -43,6 +44,8 @@ class LazyStateTensor:
     self.out_subset_size = out_subset_size
 
     self.rank = self.in_subset_size + self.out_subset_size
+    self.shape = [len(self.cash_flow_in)] * self.in_subset_size + \
+      [len(self.cash_flow_out)] * self.out_subset_size
 
   def evaluate(self, index):
     """
@@ -85,6 +88,23 @@ class LazyStateTensor:
       i += 1
     return True
 
+  def subtensor_iterator(self, index, variable_dimension):
+    """
+    [Int] -> Int -> (Int -> [Int]?)
+    Given a subtensor of the state tensor, specified by its index and the
+    index of the dimension to vary, return a function that takes a non-
+    negative integer and returns an index within the state tensor, or
+    None if the iterator has gone out of bounds.
+    """
+    max_i = self.shape[variable_dimension] - index[variable_dimension]
+    def iterate(i):
+      if i >= max_i:
+        return None
+      index_copy = index[:]
+      index_copy[variable_dimension] += i
+      return index_copy
+    return iterate
+
 
 def run_tests():
   assert(question02([66, 293, 215, 188, 147, 326, 449, 162, 46, 350],
@@ -94,5 +114,5 @@ def run_tests():
 
 
 lst = LazyStateTensor(sorted([66, 293, 215, 188, 147, 326, 449, 162, 46, 350]),
-  sorted([170, 153, 305, 290, 187])[::-1], 2, 1)
-print(lst.evaluate([1, 1, 0]))
+  sorted([170, 153, 305, 290, 187])[::-1], 1, 0)
+it = lst.subtensor_iterator([0], 0)
