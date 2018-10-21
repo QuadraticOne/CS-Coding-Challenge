@@ -5,10 +5,11 @@ from random import randint
 
 # modify this function, and create other functions below as you wish
 def question01(portfolios):
-  if len(portfolios) < 2:
-    return None
+  # if len(portfolios) < 2:
+  #   return None
   # modify and then return the variable below
-  answer = maximise_by_culling(portfolios, k=4)
+  # answer = maximise_by_culling(portfolios, k=4)
+  raise NotImplementedError()
   return answer
 
 
@@ -160,3 +161,6 @@ def dummy_portfolios(n):
   def random_binary():
     return ''.join([str(randint(0, 1)) for _ in range(16)])
   return [int(random_binary(), 2) for _ in range(n)]
+
+
+question01([])
