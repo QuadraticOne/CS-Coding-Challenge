@@ -6,7 +6,8 @@ import numpy as np
 #compute all combinations for two portfolios
 def question02(cashFlowIn, cashFlowOut):
   # modify and then return the variable below
-  answer = -1
+  state_tensor = LazyStateTensor(cashFlowIn, cashFlowOut)
+  answer = state_tensor.find_solution()
   return answer
 
 
@@ -212,14 +213,72 @@ class LazyStateTensor:
       return index_copy
     return iterate
 
+  def find_solution(self):
+    """
+    () -> Int
+    Find a solution to the given problem by finding the minimum possible
+    value of the state tensor over a range of possible subset size pairs.
+    """
+    pairs = self.possible_pairs()
+    current_best_value = None
+
+    while len(pairs) > 0:
+      next_in_size, next_out_size = pairs[0]
+      self.set_subset_sizes(next_in_size, next_out_size)
+
+      all_positive, pair_best_value = self.subtensor_properties(
+        [0] * self.rank, 0)
+      del pairs[0]
+
+      if pair_best_value == 0:
+        return 0
+      
+      current_best_value = self.highest_priority(current_best_value,
+        pair_best_value)
+
+      if pair_best_value is not None and pair_best_value < 0:
+        # If best value is negative, increasing the number of out values
+        # while maintaining the same number of in values will never work
+        self.remove_from_list_where(pairs, lambda p: p[0] == next_in_size
+          and p[1] > next_out_size)
+      if all_positive:
+        # If all values are positive, increasing the number of in values
+        # while maintaining the same number of out values will never
+        # give a better answer than the best found yet
+        self.remove_from_list_where(pairs, lambda p: p[0] > next_in_size
+          and p[1] == next_out_size)
+
+    return current_best_value
+
+  def possible_pairs(self, order_by=None):
+    """
+    ((Int, Int) -> Float) -> [(Int, Int)]
+    Generate a list of all possible subset size pairs and order
+    them according to the given function.
+    """
+    if order_by is None:
+      order_by = lambda p: p[0] + p[1]
+    pairs = []
+    for i in range(1, len(self.cash_flow_in) + 1):
+      for j in range(len(self.cash_flow_out) + 1):
+        pairs.append((i, j))
+    return sorted(pairs, key=order_by)
+
+  def remove_from_list_where(self, ls, f):
+    """
+    [a] -> (a -> Bool) -> ()
+    Remove elements from a list in-place where the element
+    satisfies the given predicate.
+    """
+    i = len(ls)
+    while i > 0:
+      i -= 1
+      if f(ls[i]):
+        del ls[i]
+
 
 def run_tests():
   assert(question02([66, 293, 215, 188, 147, 326, 449, 162, 46, 350],
     [170, 153, 305, 290, 187]) == 0)
-  assert(question02([189, 28], [43, 267, 112, 166], 2, 2) == 8)
+  assert(question02([189, 28], [43, 267, 112, 166]) == 8)
   assert(question02([72, 24, 73, 4, 28, 56, 1, 43], [27]) == 1)
-
-
-lst = LazyStateTensor(sorted([66, 293, 215, 188, 147, 326, 449, 162, 46, 350]),
-  sorted([170, 153, 305, 290, 187])[::-1], 3, 3)
-print(lst.subtensor_properties([0, 0, 0, 0, 0, 0], 0))
